@@ -1,4 +1,3 @@
-import configparser
 import importlib
 import logging
 import sys
