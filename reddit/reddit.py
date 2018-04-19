@@ -19,10 +19,14 @@ from .validator import Validator
 class Reddit:
     SUBREDDITS = 'doctorjewtest'
 
-    def __init__(self, config=None):
+    def __init__(self, config: str=None):
         if config is None:
             config = configparser.ConfigParser()
             config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+        else:
+            path = config
+            config = configparser.ConfigParser()
+            config.read(path)
 
         self.config = config
         self._username = config.get('reddit', 'username')
