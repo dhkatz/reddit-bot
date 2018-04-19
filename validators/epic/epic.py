@@ -2,11 +2,11 @@ from typing import Optional
 
 from praw.models import Comment, Submission
 
-from reddit.enums import Valid, Extension
-from reddit.validator import Validator
+from reddit.enums import Valid
+from reddit.validator import CommentValidator
 
 
-class EpicValidator(Validator):
+class EpicValidator(CommentValidator):
     def __init__(self, reddit):
         super().__init__(reddit)
 
@@ -47,4 +47,4 @@ class EpicValidator(Validator):
 
 
 def setup(reddit):
-    reddit.add_extension(Extension.COMMENT, EpicValidator(reddit))
+    reddit.add_extension(EpicValidator(reddit))

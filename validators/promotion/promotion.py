@@ -6,11 +6,11 @@ import subprocess
 import youtube_dl
 from praw.models import Submission
 
-from reddit.enums import Reason, Valid, Extension
-from reddit.validator import Validator
+from reddit.enums import Reason, Valid
+from reddit.validator import SubmissionValidator
 
 
-class VideoValidator(Validator):
+class VideoValidator(SubmissionValidator):
     __slots__ = ['extensions', 'ydl_opts']
 
     def __init__(self, reddit, quiet: bool = True):
@@ -74,7 +74,7 @@ class VideoValidator(Validator):
         return False, Reason.PROMOTION
 
 
-class PromotionValidator(Validator):
+class PromotionValidator(SubmissionValidator):
     __slots__ = ['video_validator']
 
     def __init__(self, reddit):
@@ -99,4 +99,4 @@ class PromotionValidator(Validator):
 
 
 def setup(reddit):
-    reddit.add_extension(Extension.SUBMISSION, PromotionValidator(reddit))
+    reddit.add_extension(PromotionValidator(reddit))

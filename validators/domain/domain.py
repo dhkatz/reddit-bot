@@ -1,10 +1,10 @@
 from praw.models import Submission
 
-from reddit.enums import Valid, Reason, Extension
-from reddit.validator import Validator
+from reddit.enums import Valid, Reason
+from reddit.validator import SubmissionValidator
 
 
-class DomainValidator(Validator):
+class DomainValidator(SubmissionValidator):
     __slots__ = ['domains']
 
     def __init__(self, reddit):
@@ -23,4 +23,4 @@ class DomainValidator(Validator):
 
 
 def setup(reddit):
-    reddit.add_extension(Extension.SUBMISSION, DomainValidator(reddit))
+    reddit.add_extension(DomainValidator(reddit))

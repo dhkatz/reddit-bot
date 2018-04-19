@@ -7,10 +7,10 @@ from praw.models import Submission
 
 from reddit.scheduler import SmartScheduler
 from reddit.enums import Reason, Valid
-from reddit.validator import Validator
+from reddit.validator import SubmissionValidator
 
 
-class FlairValidator(Validator):
+class FlairValidator(SubmissionValidator):
     """Check if a post has flair."""
     __slots__ = ['_store', '_scheduler']
 

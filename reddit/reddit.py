@@ -11,9 +11,9 @@ from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .database import *
-from .enums import Reason, Extension
+from .enums import Reason
 from .scheduler import *
-from .validator import Validator
+from .validator import *
 
 
 class Reddit:
@@ -45,7 +45,7 @@ class Reddit:
         job_defaults = dict(coalesce=True, max_instances=2)
         self.scheduler = SmartScheduler(BlockingScheduler(executors=executors, job_defaults=job_defaults))
         self.validators = {}
-        self.extensions = {Extension.COMMENT: [], Extension.SUBMISSION: []}
+        self.extensions = {'COMMENT': [], 'SUBMISSION': []}
 
         self.log = set_logger()
 
@@ -103,8 +103,11 @@ class Reddit:
             if lib_name == module or module.startswith(lib_name + "."):
                 del sys.modules[module]
 
-    def add_extension(self, post: Extension, extension: Validator):
-        self.extensions[post].append(extension)
+    def add_extension(self, validator: Validator):
+        if issubclass(type(validator), SubmissionValidator):
+            self.extensions['SUBMISSION'].append(validator)
+        elif issubclass(type(validator), CommentValidator):
+            self.extensions['COMMENT'].append(validator)
 
     def get_extension(self, name):
         return self.extensions.get(name)
@@ -121,7 +124,7 @@ class Reddit:
             if submission.id in self._checked_posts:
                 continue
             self._checked_posts.append(submission.id)
-            for validator in self.extensions[Extension.SUBMISSION]:
+            for validator in self.extensions['SUBMISSION']:
                 self.log.info(f'[{validator.__class__.__name__}] Checking submission...')
                 valid, reason = validator.validate(submission)
                 if not valid:
@@ -147,7 +150,7 @@ class Reddit:
                 continue
             self._checked_comments.append(comment.id)
 
-            for validator in self.extensions[Extension.COMMENT]:
+            for validator in self.extensions['COMMENT']:
                 if not validator.validate(comment):
                     comment.mod.remove()
                     continue

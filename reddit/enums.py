@@ -72,11 +72,3 @@ class Reason(Enum):
 
 
 Valid = NamedTuple('Valid', [('removed', bool), ('reason', Optional[Reason])])
-
-
-class Extension(Enum):
-    def __str__(self):
-        return str(self.value)
-
-    COMMENT = 'comment'
-    SUBMISSION = 'submission'
