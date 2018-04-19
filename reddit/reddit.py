@@ -20,13 +20,9 @@ class Reddit:
     SUBREDDITS = 'doctorjewtest'
 
     def __init__(self, config: str=None):
-        if config is None:
-            config = configparser.ConfigParser()
-            config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
-        else:
-            path = config
-            config = configparser.ConfigParser()
-            config.read(path)
+        path = config
+        config = configparser.ConfigParser()
+        config.read(path if path else os.path.join(os.path.dirname(__file__), 'config.ini'))
 
         self.config = config
         self._username = config.get('reddit', 'username')
