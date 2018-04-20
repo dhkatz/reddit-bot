@@ -10,7 +10,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .database import *
-from .enums import Reason
+from .enums import Rule
 from .scheduler import *
 from .validator import *
 
@@ -58,17 +58,16 @@ class Reddit:
         self.scheduler.start()
 
     def setup(self):
-        for _, validators in self.config.items('validators'):
-            if not validators:
+        for _, validator in self.config.items('validators'):
+            if not validator:
                 continue
 
-            for validator in validators.split(','):
-                try:
-                    self.load_validator(validator)
-                except ImportError as error:
-                    self.log.error(f'[Core] Unable to load validator: {validator}! (Error: {error})')
-                else:
-                    self.log.info(f'[Core] Loaded validator: {validator}!')
+            try:
+                self.load_validator(validator)
+            except ImportError as error:
+                self.log.error(f'[Core] Unable to load validator: {validator}! (Error: {error})')
+            else:
+                self.log.info(f'[Core] Loaded validator: {validator}!')
 
     def load_validator(self, name):
         name = name + '.' + name.split('.')[1]
@@ -103,10 +102,15 @@ class Reddit:
                 del sys.modules[module]
 
     def add_extension(self, validator: Validator):
-        if issubclass(type(validator), SubmissionValidator):
+        if issubclass(type(validator), SubmissionValidator):  # Submission specific validators
             self.extensions['SUBMISSION'].append(validator)
-        elif issubclass(type(validator), CommentValidator):
+        elif issubclass(type(validator), CommentValidator):  # Comment specific validators
             self.extensions['COMMENT'].append(validator)
+        elif issubclass(type(validator), Validator):  # Generic validators run on both
+            self.extensions['SUBMISSION'].append(validator)
+            self.extensions['COMMENT'].append(validator)
+        else:
+            raise TypeError("Validator must be a subclass of either SubmissionValidator/CommentValidator or Validator!")
 
     def get_extension(self, name):
         return self.extensions.get(name)
@@ -138,7 +142,7 @@ class Reddit:
         self.log.info(f'[Core] Submission would have been approved!')
         submission.mod.approve()
 
-    def remove_submission(self, submission: models.Submission, reason: Reason):
+    def remove_submission(self, submission: models.Submission, reason: Rule):
         self.log.info(f'[Core] Submission would have been removed!')
         submission.reply(str(reason)).mod.distinguish(sticky=False)
         submission.mod.remove()

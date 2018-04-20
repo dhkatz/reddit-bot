@@ -6,7 +6,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from praw.models import Submission
 
 from reddit.scheduler import SmartScheduler
-from reddit.enums import Reason, Valid
+from reddit.enums import Rule, Valid
 from reddit.validator import SubmissionValidator
 
 
@@ -35,7 +35,7 @@ class FlairValidator(SubmissionValidator):
 
             if elapsed_time > self.config.get('general', 'remove_time'):
                 self._store.remove(submission.id)
-                submission.reply(str(Reason.FLAIR)).mod.distinguish()
+                submission.reply(str(Rule.FLAIR)).mod.distinguish()
                 submission.mod.remove()
 
     def validate(self, submission: Submission) -> Valid:

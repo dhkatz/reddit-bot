@@ -6,7 +6,7 @@ import subprocess
 import youtube_dl
 from praw.models import Submission
 
-from reddit.enums import Reason, Valid
+from reddit.enums import Rule, Valid
 from reddit.validator import SubmissionValidator
 
 
@@ -71,7 +71,7 @@ class VideoValidator(SubmissionValidator):
                     pass
                 else:
                     print(metadata)
-        return False, Reason.PROMOTION
+        return False, Rule.PROMOTION
 
 
 class PromotionValidator(SubmissionValidator):
@@ -95,7 +95,7 @@ class PromotionValidator(SubmissionValidator):
         if counter >= self.config.get('general', 'comment_limit') and self.video_validator.validate(submission):
             return True, None
 
-        return False, Reason.PROMOTION
+        return False, Rule.PROMOTION
 
 
 def setup(reddit):

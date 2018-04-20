@@ -61,7 +61,7 @@ You also may also only make one promotional post every 3-4 days and any giveaway
 """
 
 
-class Reason(Enum):
+class Rule(Enum):
     def __str__(self):
         return str(HEADER + self.value + FOOTER)
 
@@ -71,4 +71,4 @@ class Reason(Enum):
     NONE = 'none'
 
 
-Valid = NamedTuple('Valid', [('removed', bool), ('reason', Optional[Reason])])
+Valid = NamedTuple('Valid', [('removed', bool), ('reason', Optional[Rule])])
