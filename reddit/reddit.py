@@ -53,7 +53,6 @@ class Reddit:
         self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
 
         self.scheduler.register_job("Posts", 15, self.process_submissions)
-        # self.scheduler.add_job(self.process_reports, 'interval', minutes=1)
         # self.scheduler.register_job("Comments", 10, self.process_comments)
         self.scheduler.start()
 
