@@ -46,7 +46,7 @@ class Reddit:
         self.validators = {}
         self.extensions = {'COMMENT': [], 'SUBMISSION': []}
 
-        self.log = set_logger()
+        self.log = set_logger(self.config.get('general', 'log_level'))
 
     def run(self):
         self.setup()
@@ -66,7 +66,7 @@ class Reddit:
             except ImportError as error:
                 self.log.error(f'[Core] Unable to load validator: {validator}! (Error: {error})')
             else:
-                self.log.info(f'[Core] Loaded validator: {validator}!')
+                self.log.debug(f'[Core] Loaded validator: {validator}!')
 
     def load_validator(self, name):
         name = name + '.' + name.split('.')[1]
@@ -127,22 +127,22 @@ class Reddit:
                 continue
             self._checked_posts.append(submission.id)
             for validator in self.extensions['SUBMISSION']:
-                self.log.info(f'[{validator.__class__.__name__}] Checking submission...')
+                self.log.debug(f'[{validator.__class__.__name__}] Checking submission...')
                 valid, reason = validator.validate(submission)
                 if not valid:
-                    self.log.info(f'[{validator.__class__.__name__}] Submission failed check!')
+                    self.log.debug(f'[{validator.__class__.__name__}] Submission failed check!')
                     self.remove_submission(submission, reason)
                     break
-                self.log.info(f'[{validator.__class__.__name__}] Submission passed check!')
+                self.log.debug(f'[{validator.__class__.__name__}] Submission passed check!')
             else:
                 self.approve_submission(submission)
 
     def approve_submission(self, submission: models.Submission):
-        self.log.info(f'[Core] Submission would have been approved!')
+        self.log.debug(f'[Core] Submission would have been approved!')
         submission.mod.approve()
 
     def remove_submission(self, submission: models.Submission, reason: Rule):
-        self.log.info(f'[Core] Submission would have been removed!')
+        self.log.debug(f'[Core] Submission would have been removed!')
         submission.reply(str(reason)).mod.distinguish(sticky=False)
         submission.mod.remove()
 
@@ -158,19 +158,22 @@ class Reddit:
                     continue
 
 
-def set_logger():
+def set_logger(level: str):
+    level = level.upper()
+
     logger = logging.getLogger('reddit')
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
     log_format = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 
     ch = logging.StreamHandler(sys.stdout)
     ch.setFormatter(log_format)
-    ch.setLevel(logging.INFO)
+    ch.setLevel(level)
     logger.addHandler(ch)
 
     fh = RotatingFileHandler(filename='data/reddit.log', maxBytes=1024 * 5, backupCount=2, encoding='utf-8',
                              mode='w')
     fh.setFormatter(log_format)
+    fh.setLevel(level)
     logger.addHandler(fh)
 
     return logger

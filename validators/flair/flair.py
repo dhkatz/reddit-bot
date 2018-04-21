@@ -1,46 +1,57 @@
 from collections import deque
 from time import time
+from namedlist import namedlist
 
-from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
-from apscheduler.schedulers.blocking import BlockingScheduler
 from praw.models import Submission
 
-from reddit.scheduler import SmartScheduler
 from reddit.enums import Rule, Valid
 from reddit.validator import SubmissionValidator
+
+WatchedSubmission = namedlist('WatchedSubmission', [('id', ''), ('created', 0.0), ('warned', False)])
 
 
 class FlairValidator(SubmissionValidator):
     """Check if a post has flair."""
-    __slots__ = ['_store', '_scheduler']
+    __slots__ = ['_store']
 
     def __init__(self, reddit):
         super().__init__(reddit)
         self._store = deque(maxlen=1000)
-        executors = dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor(5))
-        job_defaults = dict(coalesce=True, max_instances=2)
-        self._scheduler = SmartScheduler(BlockingScheduler(executors=executors, job_defaults=job_defaults))
-        self._scheduler.register_job("Process", self.config.get('general', 'process_time'), self.process)
 
     def process(self):
-        for submission in self._store:
-            elapsed_time = time() - submission.created_utc
-            if elapsed_time > self.config.get('general', 'warn_time') and submission.id not in self._store:
-                author = self._praw.redditor(submission.author)
-                author.message(
-                    self.config.get('message', 'subject'),
-                    self.config.get('message', 'body')
-                        .format(post_url=submission.shortlink, time=self.config.get('general', 'remove_time'))
-                )
+        self._store = deque([submission for submission in list(self._store) if self.check(submission)])
 
-            if elapsed_time > self.config.get('general', 'remove_time'):
-                self._store.remove(submission.id)
-                submission.reply(str(Rule.FLAIR)).mod.distinguish()
-                submission.mod.remove()
+    def check(self, watched_submission: WatchedSubmission) -> bool:
+        elapsed_time = time() - watched_submission.created
+        if elapsed_time < self.config.getint('general', 'warn_time'):
+            return True  # We can avoid unnecessary requests by checking first!
+
+        submission = self._praw.submission(watched_submission.id)
+
+        if not watched_submission.warned and submission.link_flair_text is None:
+            self.dlog('Warning user about an unflaired post!')
+            author = submission.author
+            author.message(
+                self.config.get('message', 'subject'),
+                self.config.get('message', 'body')
+                    .format(post_url=submission.shortlink, time=int(self.config.getint('general', 'remove_time') / 60))
+            )
+            watched_submission.warned = True
+            return True
+        elif elapsed_time >= self.config.getint('general', 'remove_time') and submission.link_flair_text is None:
+            self.dlog('Removing an unflaired post!')
+            submission.reply(str(Rule.FLAIR)).mod.distinguish()
+            submission.mod.remove()
+            return False
+        elif submission.link_flair_text is not None:
+            return False
+
+        return True
 
     def validate(self, submission: Submission) -> Valid:
         if submission.link_flair_text is None:
-            self._store.append(submission)
+            watch = WatchedSubmission(submission.id, submission.created_utc, False)
+            self._store.appendleft(watch)
             return True, None  # We can't actually make a judgement yet
 
 

@@ -60,14 +60,15 @@ class VideoValidator(SubmissionValidator):
                 print(e)
 
         if meta is not None:
-            if 'duration' in meta and meta['duration'] <= self.config.get('general', 'time_limit'):
+            if 'duration' in meta and meta['duration'] <= self.config.getfloat('general', 'time_limit'):
+                self.dlog(f'Duration: {meta["duration"]}')
                 return True, None
             else:
                 url = self.find_url(meta)
                 try:
                     metadata = self.get_metadata(url)
                 except Exception as e:
-                    # print('ERROR', meta, e)
+                    print('ERROR', meta, e)
                     pass
                 else:
                     print(metadata)
@@ -75,24 +76,26 @@ class VideoValidator(SubmissionValidator):
 
 
 class PromotionValidator(SubmissionValidator):
-    __slots__ = ['video_validator']
+    __slots__ = ['video']
 
     def __init__(self, reddit):
         super().__init__(reddit)
-        self.video_validator = VideoValidator(reddit)
+        self.video = VideoValidator(reddit)
 
     def validate(self, submission: Submission) -> Valid:
-        if submission.url not in self.config.get('domains', 'watched').split(','):
+        if not any(url in submission.url for url in self.reddit.config.get('domains', 'watched').split(',')):
             return True, None
+
+        self.dlog('Found watched URL in submission!')
 
         counter = 0
         for comment in submission.author.comments.new(limit=None):
             if comment.subreddit.display_name.lower() in self.reddit.SUBREDDITS:
                 counter += 1
-                if counter >= self.config.get('general', 'comment_limit'):
+                if counter >= self.config.getint('general', 'comment_limit'):
                     break
 
-        if counter >= self.config.get('general', 'comment_limit') and self.video_validator.validate(submission):
+        if counter >= self.config.getint('general', 'comment_limit') or self.video.validate(submission)[0]:
             return True, None
 
         return False, Rule.PROMOTION
