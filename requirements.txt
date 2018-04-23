@@ -1,4 +1,3 @@
-youtube_dl
 apscheduler
 praw
 peewee
