@@ -52,8 +52,8 @@ class Reddit:
         self.setup()
         self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
 
-        self.scheduler.register_job("Posts", 30, self.process_submissions)
-        self.scheduler.register_job("Comments", 10, self.process_comments)
+        self.scheduler.register_job("Posts", 30, self.process_submissions, self.log)
+        self.scheduler.register_job("Comments", 10, self.process_comments, self.log)
         self.scheduler.start()
 
     def setup(self):
