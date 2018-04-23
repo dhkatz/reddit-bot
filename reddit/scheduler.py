@@ -2,19 +2,20 @@ import threading
 
 
 class SmartJob:
-    def __init__(self, job_id, action, lock):
+    def __init__(self, job_id, action, lock, logger):
         self.id = job_id
         self.action = action
         self.running = False
         self.misfired = False
         self.job_info_lock = lock
+        self.logger = logger
         
     def execute_job(self):
         with self.job_info_lock:
             # Check if a job is already running
             if self.running:
                 # Indicate misfire and die
-                print(f"{self.id} Misfired")
+                self.logger.debug(f"{self.id} Misfired")
                 self.misfired = True
                 return
             else:
@@ -23,7 +24,11 @@ class SmartJob:
                 self.misfired = False
 
         # Run the job
-        self.action()
+        try:
+            self.action()
+        except Exception as error:
+            self.logger.debug(f"{self.id} Exited with an exception - " + repr(error))
+            self.logger.error(error)
 
         # Run misfire recovery on same thread in the event of a misfire
         while True:
@@ -52,6 +57,6 @@ class SmartScheduler:
     def start(self):
         self.scheduler.start()
         
-    def register_job(self, job_id, interval, action):
-        self.jobs[job_id] = SmartJob(job_id, action, self.job_info_lock)
+    def register_job(self, job_id, interval, action, logger):
+        self.jobs[job_id] = SmartJob(job_id, action, self.job_info_lock, logger=logger)
         self.scheduler.add_job(self.jobs[job_id].execute_job, 'interval', id=job_id, seconds=interval)

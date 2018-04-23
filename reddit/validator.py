@@ -19,7 +19,7 @@ class Validator:
         # Magic to dynamically load a file relative to the current class executing
         if os.path.isfile(os.path.join(os.path.dirname(inspect.stack()[1][1]), 'config.ini')):
             self.config.read(os.path.join(os.path.dirname(inspect.stack()[1][1]), 'config.ini'))
-        self.reddit.scheduler.register_job(type(self).__name__, 15, self.process)
+        self.reddit.scheduler.register_job(type(self).__name__, 15, self.process, self.reddit.log)
 
     def process(self):
         pass
