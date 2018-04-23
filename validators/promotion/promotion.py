@@ -2,11 +2,11 @@ import json
 import mimetypes
 import shlex
 import subprocess
-
+from typing import Tuple
 import youtube_dl
 from praw.models import Submission
 
-from reddit.enums import Rule, Valid
+from reddit.enums import Rule, Action
 from reddit.validator import SubmissionValidator
 
 
@@ -50,7 +50,7 @@ class VideoValidator(SubmissionValidator):
             elif isinstance(v, dict):
                 return self.find_url(v)
 
-    def validate(self, submission: Submission) -> Valid:
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         url = submission.url
         meta = None
         with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
@@ -62,7 +62,7 @@ class VideoValidator(SubmissionValidator):
         if meta is not None:
             if 'duration' in meta and meta['duration'] <= self.config.getfloat('general', 'time_limit'):
                 self.dlog(f'Duration: {meta["duration"]}')
-                return True, None
+                return Action.APPROVE, Rule.NONE
             else:
                 url = self.find_url(meta)
                 try:
@@ -72,19 +72,32 @@ class VideoValidator(SubmissionValidator):
                     pass
                 else:
                     print(metadata)
-        return False, Rule.PROMOTION
+        return Action.REMOVE, Rule.PROMOTION
+
+
+class YoutubeValidator(VideoValidator):
+    def __init__(self, reddit):
+        super().__init__(reddit)
+
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
+        if any(url in submission.url for url in self.config.get('youtube', 'domains').split(',')):
+            if 'channel' in submission.url or 'live' in submission.url:
+                return Action.REMOVE, Rule.PROMOTION
+
+            return super(YoutubeValidator, self).validate(submission)
 
 
 class PromotionValidator(SubmissionValidator):
-    __slots__ = ['video']
+    __slots__ = ['video', 'youtube']
 
     def __init__(self, reddit):
         super().__init__(reddit)
         self.video = VideoValidator(reddit)
+        self.youtube = YoutubeValidator(reddit)
 
-    def validate(self, submission: Submission) -> Valid:
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if not any(url in submission.url for url in self.reddit.config.get('domains', 'watched').split(',')):
-            return True, None
+            return Action.PASS, Rule.NONE
 
         self.dlog('Found watched URL in submission!')
 
@@ -95,10 +108,13 @@ class PromotionValidator(SubmissionValidator):
                 if counter >= self.config.getint('general', 'comment_limit'):
                     break
 
-        if counter >= self.config.getint('general', 'comment_limit') or self.video.validate(submission)[0]:
-            return True, None
+        if counter < self.config.getint('general', 'comment_limit'):
+            if not self.youtube.validate(submission)[0]:
+                return Action.REMOVE, Rule.PROMOTION
+        else:
+            return Action.MANUAL, Rule.NONE
 
-        return False, Rule.PROMOTION
+        return Action.REMOVE, Rule.PROMOTION
 
 
 def setup(reddit):

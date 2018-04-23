@@ -9,8 +9,6 @@ import praw.models as models
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from .database import *
-from .enums import Rule
 from .scheduler import *
 from .validator import *
 
@@ -35,7 +33,6 @@ class Reddit:
         self._comment_checks = []
         self._report_checks = []
 
-        self.database = Database()
         self.domains = dict(config.items('domains'))
         self.reddit = praw.Reddit(username=self._username, password=self._password, client_id=self._client_id,
                                   client_secret=self._client_secret, user_agent=self._user_agent)
@@ -48,12 +45,15 @@ class Reddit:
 
         self.log = set_logger(self.config.get('general', 'log_level'))
 
+        if path:
+            self.log.debug(f'[Core] Loaded custom configuration file from {path}')
+
     def run(self):
         self.setup()
         self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
 
-        self.scheduler.register_job("Posts", 15, self.process_submissions)
-        # self.scheduler.register_job("Comments", 10, self.process_comments)
+        self.scheduler.register_job("Posts", 30, self.process_submissions)
+        self.scheduler.register_job("Comments", 10, self.process_comments)
         self.scheduler.start()
 
     def setup(self):
@@ -126,24 +126,34 @@ class Reddit:
             if submission.id in self._checked_posts:
                 continue
             self._checked_posts.append(submission.id)
+
+            approved = False
             for validator in self.extensions['SUBMISSION']:
-                self.log.debug(f'[{validator.__class__.__name__}] Checking submission...')
-                valid, reason = validator.validate(submission)
-                if not valid:
-                    self.log.debug(f'[{validator.__class__.__name__}] Submission failed check!')
-                    self.remove_submission(submission, reason)
+                validator.dlog('Checking submission...')
+                action, rule = validator.validate(submission)
+                if action == Action.REMOVE:
+                    validator.dlog('Submission failed check!')
+                    self.remove_submission(submission, rule)
                     break
-                self.log.debug(f'[{validator.__class__.__name__}] Submission passed check!')
+                elif action == Action.MANUAL:
+                    validator.dlog('Leaving for manual approval.')
+                    break
+                elif action == Action.PASS:
+                    validator.dlog('Ignoring submission.')
+                else:
+                    approved = True
+                validator.dlog('Submission passed check!')
             else:
-                self.approve_submission(submission)
+                if approved:  # In case no validators explicitly approve, they might all pass!
+                    self.approve_submission(submission)
 
     def approve_submission(self, submission: models.Submission):
         self.log.debug(f'[Core] Submission would have been approved!')
         submission.mod.approve()
 
-    def remove_submission(self, submission: models.Submission, reason: Rule):
+    def remove_submission(self, submission: models.Submission, rule: Rule):
         self.log.debug(f'[Core] Submission would have been removed!')
-        submission.reply(str(reason)).mod.distinguish(sticky=False)
+        submission.reply(str(rule)).mod.distinguish(sticky=False)
         submission.mod.remove()
 
     def process_comments(self):
@@ -153,9 +163,39 @@ class Reddit:
             self._checked_comments.append(comment.id)
 
             for validator in self.extensions['COMMENT']:
-                if not validator.validate(comment):
-                    comment.mod.remove()
-                    continue
+                action, rule = validator.validate(comment)
+                comment.mod.remove()
+                continue
+
+            approved = False
+            for validator in self.extensions['COMMENT']:
+                validator.dlog('Checking comment...')
+                action, rule = validator.validate(comment)
+                if action == Action.REMOVE:
+                    validator.dlog('Comment failed check!')
+                    self.remove_comment(comment, rule)
+                    break
+                elif action == Action.MANUAL:
+                    validator.dlog('Leaving for manual approval.')
+                    break
+                elif action == Action.PASS:
+                    validator.dlog('Ignoring comment.')
+                else:
+                    approved = True
+                validator.dlog('Comment passed check!')
+            else:
+                if approved:  # In case no validators explicitly approve, they might all pass!
+                    self.approve_comment(comment)
+
+    def approve_comment(self, comment: Comment):
+        self.log.debug(f'[Core] Comment would have been approved!')
+        comment.mod.approve()
+
+    def remove_comment(self, comment: Comment, rule: Rule):
+        self.log.debug(f'[Core] Comment would have been removed!')
+        if self.config.getboolean('general', 'comment_reason'):
+            comment.reply(str(rule)).mod.distinguish(sticky=False)
+        comment.mod.remove()
 
 
 def set_logger(level: str):

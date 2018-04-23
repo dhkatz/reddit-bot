@@ -1,47 +1,60 @@
-from typing import Optional
+from collections import deque, OrderedDict
+from typing import Tuple, Optional
 
 from praw.models import Comment, Submission
 
-from reddit.enums import Valid
+from reddit.enums import Action, Rule
 from reddit.validator import CommentValidator
 
 
+class LimitedSizeDict(OrderedDict):
+    def __init__(self, *args, **kwargs):
+        self.size_limit = kwargs.pop("size_limit", None)
+        OrderedDict.__init__(self, *args, **kwargs)
+        self._check_size_limit()
+
+    def __setitem__(self, key, value):
+        OrderedDict.__setitem__(self, key, value)
+        self._check_size_limit()
+
+    def _check_size_limit(self):
+        if self.size_limit is not None:
+            while len(self) > self.size_limit:
+                self.popitem(last=False)
+
+
 class EpicValidator(CommentValidator):
+    __slots__ = ['_sticky_store', '_comment_store']
+
     def __init__(self, reddit):
         super().__init__(reddit)
+        self._sticky_store = LimitedSizeDict(size_limit=20)
+        self._comment_store = deque(maxlen=200)
 
-    def validate(self, comment: Comment) -> Valid:
-        if comment.author_flair_css_class and comment.author_flair_css_class.lower() in self.config['general']['class']:
-            sticky = self.has_sticky(comment.submission)
+    def validate(self, comment: Comment) -> Tuple[Action, Rule]:
+        css_class = comment.author_flair_css_class
+        if comment.id not in self._comment_store and css_class and css_class.lower() in self.config['general']['class']:
+            self._comment_store.appendleft(comment.id)
         else:
-            return True, None
+            return Action.PASS, Rule.NONE  # Either we are already tracking or not a class we care about
 
-        if self.reddit.database.get_sticky_comment(comment.id):  # In case the bot some how has the Epic flair
-            return True, None
-
-        self.reddit.log.info('[Epic] Found comment by Epic ({0.author}): {0.body}'.format(comment))
-
+        sticky = self.get_sticky(comment.submission)
         if sticky:
-            if comment.id in sticky.body:  # It's already there somehow
-                return True, None
-            else:
-                count = self.reddit.database.count_epic(comment.submission.id)
-                sticky.edit(sticky.body + f'\n\n[Epic Comment {count + 1}](https://www.reddit.com{comment.permalink})')
-                self.reddit.log.info(f'Updated stickied Epic comment tracker: https://www.reddit.com{sticky.permalink}')
+            sticky = self._praw.comment(id=sticky)
+            sticky.edit(
+                sticky.body + '\n\n[Epic Comment ' + str(len(self._sticky_store[sticky])) +
+                f']({comment.shortlink})'
+            )
         else:
-            self.reddit.log.info('[Epic] Epic Comment post would have been created!')
-            # reply = comment.submission.reply(f'Replies by Epic Games:\n\n'
-            #                                  f'[Epic Comment 1](https://www.reddit.com{comment.permalink})')
-            # reply.mod.distinguish(sticky=True)
-            #
-            # self._db.create_sticky_comment(reply)
-            # self.log.info(f'Created new stickied Epic comment tracker: https://www.reddit.com{reply.permalink}')
-        self.reddit.database.create_comment(comment)
+            sticky = comment.submission.reply(
+                '##Comments by Epic Games:##\n\n' +
+                f'[Epic Comment 1]({comment.shortlink})'
+            ).mod.distinguish(sticky=True)
+            self._sticky_store[comment.submission.id] = sticky.id
 
-    def has_sticky(self, submission: Submission) -> Optional[Comment]:
-        for reply in submission.comments:
-            if reply.stickied and self.reddit.database.get_sticky_comment(reply.id):
-                return reply
+    def get_sticky(self, submission: Submission) -> Optional[str]:
+        if submission.id in self._sticky_store:
+            return self._sticky_store[submission.id]
 
         return None
 

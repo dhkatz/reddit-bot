@@ -2,9 +2,11 @@ import configparser
 import inspect
 import os
 
+from typing import Tuple
+
 from praw.models import Submission, Comment
 
-from .enums import Valid
+from .enums import Action, Rule
 
 
 class Validator:
@@ -15,7 +17,8 @@ class Validator:
         self.reddit = reddit
         self.config = configparser.ConfigParser()
         # Magic to dynamically load a file relative to the current class executing
-        self.config.read(os.path.join(os.path.dirname(inspect.stack()[1][1]), 'config.ini'))
+        if os.path.isfile(os.path.join(os.path.dirname(inspect.stack()[1][1]), 'config.ini')):
+            self.config.read(os.path.join(os.path.dirname(inspect.stack()[1][1]), 'config.ini'))
         self.reddit.scheduler.register_job(type(self).__name__, 15, self.process)
 
     def process(self):
@@ -27,10 +30,10 @@ class Validator:
 
 
 class SubmissionValidator(Validator):
-    def validate(self, submission: Submission) -> Valid:
-        return True, None
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
+        return Action.PASS, Rule.NONE
 
 
 class CommentValidator(Validator):
-    def validate(self, comment: Comment) -> Valid:
-        return True, None
+    def validate(self, comment: Comment) -> Tuple[Action, Rule]:
+        return Action.PASS, Rule.NONE

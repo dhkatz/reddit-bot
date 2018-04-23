@@ -1,6 +1,8 @@
 from praw.models import Submission
 
-from reddit.enums import Valid, Rule
+from typing import Tuple
+
+from reddit.enums import Rule, Action
 from reddit.validator import SubmissionValidator
 
 
@@ -11,15 +13,15 @@ class DomainValidator(SubmissionValidator):
         super().__init__(reddit)
         self.domains = dict(reddit.config.items('domains'))
 
-    def validate(self, submission: Submission) -> Valid:
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if submission.is_self:
-            return True, None
+            return Action.PASS, Rule.NONE
         elif any(host in submission.url for host in self.domains['approved'].split(',')):
-            return True, None
+            return Action.APPROVE, Rule.NONE
         elif any(host in submission.url for host in self.domains['rejected'].split(',')):
-            return False, Rule.DOMAIN
+            return Action.REMOVE, Rule.DOMAIN
 
-        return True, None
+        return Action.PASS, Rule.DOMAIN
 
 
 def setup(reddit):

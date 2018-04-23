@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, auto
 from typing import NamedTuple, Optional
 
 # DO NOT REMOVE HEADER OR FOOTER
@@ -71,4 +71,8 @@ class Rule(Enum):
     NONE = 'none'
 
 
-Valid = NamedTuple('Valid', [('removed', bool), ('reason', Optional[Rule])])
+class Action(Enum):
+    APPROVE = auto()
+    REMOVE = auto()
+    MANUAL = auto()
+    PASS = auto()

@@ -1,10 +1,11 @@
 from collections import deque
 from time import time
 from namedlist import namedlist
+from typing import Tuple
 
 from praw.models import Submission
 
-from reddit.enums import Rule, Valid
+from reddit.enums import Rule, Action
 from reddit.validator import SubmissionValidator
 
 WatchedSubmission = namedlist('WatchedSubmission', [('id', ''), ('created', 0.0), ('warned', False)])
@@ -48,11 +49,11 @@ class FlairValidator(SubmissionValidator):
 
         return True
 
-    def validate(self, submission: Submission) -> Valid:
+    def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if submission.link_flair_text is None:
             watch = WatchedSubmission(submission.id, submission.created_utc, False)
             self._store.appendleft(watch)
-            return True, None  # We can't actually make a judgement yet
+            return Action.PASS, Rule.NONE  # We can't actually make a judgement yet
 
 
 def setup(reddit):
