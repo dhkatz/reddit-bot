@@ -16,7 +16,13 @@ from .validator import *
 class Reddit:
     SUBREDDITS = 'doctorjewtest'
 
-    def __init__(self, config: str=None):
+    __slots__ = [
+        'config', '_username', '_password', '_client_id', '_client_secret', '_user_agent', '_checked_comments',
+        '_checked_posts', '_post_checks', '_comment_checks', '_report_checks', 'domains', 'reddit',
+        'scheduler', 'validators', 'extensions', 'log'
+    ]
+
+    def __init__(self, config: str = None):
         path = config
         config = configparser.ConfigParser()
         config.read(path if path else os.path.join(os.path.dirname(__file__), 'config.ini'))
@@ -37,8 +43,8 @@ class Reddit:
         self.reddit = praw.Reddit(username=self._username, password=self._password, client_id=self._client_id,
                                   client_secret=self._client_secret, user_agent=self._user_agent)
 
-        executors = dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor(5))
-        job_defaults = dict(coalesce=True, max_instances=2)
+        executors = dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor())
+        job_defaults = dict(coalesce=True, max_instances=4)
         self.scheduler = SmartScheduler(BlockingScheduler(executors=executors, job_defaults=job_defaults))
         self.validators = {}
         self.extensions = {'COMMENT': [], 'SUBMISSION': []}
@@ -157,15 +163,10 @@ class Reddit:
         submission.mod.remove()
 
     def process_comments(self):
-        for comment in self.reddit.subreddit(self.SUBREDDITS).comments(limit=50):
+        for comment in self.reddit.subreddit(self.SUBREDDITS).comments(limit=100):
             if comment.id in self._checked_comments or comment.submission.archived:
-                continue
+                break  # We don't want to revalidate comments or go too old
             self._checked_comments.append(comment.id)
-
-            for validator in self.extensions['COMMENT']:
-                action, rule = validator.validate(comment)
-                comment.mod.remove()
-                continue
 
             approved = False
             for validator in self.extensions['COMMENT']:

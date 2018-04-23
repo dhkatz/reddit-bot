@@ -8,7 +8,7 @@ try:
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '../data')))
 except OSError as e:
     if e.errno != errno.EEXIST:
-        raise
+        raise e
 
 
 class Database:

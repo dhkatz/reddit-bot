@@ -13,6 +13,7 @@ class Validator:
     __slots__ = ['_praw', 'config', 'reddit']
 
     def __init__(self, reddit):
+        super().__init__()
         self._praw = reddit.reddit
         self.reddit = reddit
         self.config = configparser.ConfigParser()

@@ -43,13 +43,14 @@ class EpicValidator(CommentValidator):
             sticky = self._praw.comment(id=sticky)
             sticky.edit(
                 sticky.body + '\n\n[Epic Comment ' + str(len(self._sticky_store[sticky])) +
-                f']({comment.shortlink})'
+                f']({comment.permalink})'
             )
         else:
             sticky = comment.submission.reply(
                 '##Comments by Epic Games:##\n\n' +
-                f'[Epic Comment 1]({comment.shortlink})'
-            ).mod.distinguish(sticky=True)
+                f'[Epic Comment 1]({comment.permalink})'
+            )
+            sticky.mod.distinguish(sticky=True)
             self._sticky_store[comment.submission.id] = sticky.id
 
     def get_sticky(self, submission: Submission) -> Optional[str]:

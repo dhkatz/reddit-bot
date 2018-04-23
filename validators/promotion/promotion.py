@@ -1,8 +1,12 @@
 import json
 import mimetypes
+from urllib.parse import urlparse, parse_qs
 import shlex
+import requests
+import isodate
 import subprocess
 from typing import Tuple
+
 import youtube_dl
 from praw.models import Submission
 
@@ -75,16 +79,40 @@ class VideoValidator(SubmissionValidator):
         return Action.REMOVE, Rule.PROMOTION
 
 
-class YoutubeValidator(VideoValidator):
+class YoutubeValidator(SubmissionValidator):
+    __slots__ = ['api']
+
     def __init__(self, reddit):
         super().__init__(reddit)
+        self.api = 'https://www.googleapis.com/youtube/v3/videos?id={id}&key={key}&part=contentDetails'
 
     def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if any(url in submission.url for url in self.config.get('youtube', 'domains').split(',')):
             if 'channel' in submission.url or 'live' in submission.url:
                 return Action.REMOVE, Rule.PROMOTION
+            else:
+                video_id = self.get_id(submission.url)
+                response = requests.get(self.api.format(id=video_id, key=self.config.get('youtube', 'api')))
+                if 300 > response.status_code >= 200:
+                    data = response.json()
+                else:
+                    raise ConnectionError
 
-            return super(YoutubeValidator, self).validate(submission)
+                duration = isodate.parse_duration(data['items'][0]['contentDetails']['duration']).total_seconds()
+
+                if duration > self.config.getfloat('general', 'time_limit'):
+                    return Action.REMOVE, Rule.PROMOTION
+                else:
+                    return Action.APPROVE, Rule.NONE
+
+    def get_id(self, url):
+        u_pars = urlparse(url)
+        quer_v = parse_qs(u_pars.query).get('v')
+        if quer_v:
+            return quer_v[0]
+        pth = u_pars.path.split('/')
+        if pth:
+            return pth[-1]
 
 
 class PromotionValidator(SubmissionValidator):
@@ -92,7 +120,6 @@ class PromotionValidator(SubmissionValidator):
 
     def __init__(self, reddit):
         super().__init__(reddit)
-        self.video = VideoValidator(reddit)
         self.youtube = YoutubeValidator(reddit)
 
     def validate(self, submission: Submission) -> Tuple[Action, Rule]:
@@ -109,12 +136,12 @@ class PromotionValidator(SubmissionValidator):
                     break
 
         if counter < self.config.getint('general', 'comment_limit'):
-            if not self.youtube.validate(submission)[0]:
+            if self.youtube.validate(submission)[0] == Action.REMOVE:
                 return Action.REMOVE, Rule.PROMOTION
+            else:
+                return Action.APPROVE, Rule.NONE
         else:
             return Action.MANUAL, Rule.NONE
-
-        return Action.REMOVE, Rule.PROMOTION
 
 
 def setup(reddit):
