@@ -1,6 +1,7 @@
 import configparser
 import inspect
 import os
+import logging
 
 from typing import Tuple
 
@@ -27,7 +28,8 @@ class Validator:
 
     def dlog(self, message: str):
         """Log messages at the debug level. The validator name is prefixed automatically!"""
-        self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
+        if self.reddit.log.isEnabledFor(logging.DEBUG):
+            self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
 
 
 class SubmissionValidator(Validator):

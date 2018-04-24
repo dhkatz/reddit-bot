@@ -100,11 +100,12 @@ class YoutubeValidator(SubmissionValidator):
                 else:
                     return Action.APPROVE, Rule.NONE
 
-    def get_id(self, url):
+    @staticmethod
+    def get_id(url):
         u_pars = urlparse(url)
-        quer_v = parse_qs(u_pars.query).get('v')
-        if quer_v:
-            return quer_v[0]
+        query_v = parse_qs(u_pars.query).get('v')
+        if query_v:
+            return query_v[0]
         pth = u_pars.path.split('/')
         if pth:
             return pth[-1]
@@ -137,6 +138,7 @@ class PromotionValidator(SubmissionValidator):
 
         if counter < self.config.getint('general', 'comment_limit'):
             if self.youtube.validate(submission)[0] == Action.REMOVE:
+                self.dlog(f'Removing video longer than {self.config.getfloat("general", "time_limit")} seconds.')
                 return Action.REMOVE, Rule.PROMOTION
             else:
                 return Action.APPROVE, Rule.NONE
