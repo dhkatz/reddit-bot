@@ -53,6 +53,7 @@ class FlairValidator(SubmissionValidator):
         if submission.link_flair_text is None:
             watch = WatchedSubmission(submission.id, submission.created_utc, False)
             self._store.appendleft(watch)
+            self.dlog('Storing submission for later processing...')
             return Action.PASS, Rule.NONE  # We can't actually make a judgement yet
 
 

@@ -1,8 +1,8 @@
-from urllib.parse import urlparse, parse_qs
-import requests
-import isodate
 from typing import Tuple
+from urllib.parse import urlparse, parse_qs
 
+import isodate
+import requests
 from praw.models import Submission
 
 from reddit.enums import Rule, Action
@@ -121,7 +121,7 @@ class PromotionValidator(SubmissionValidator):
     def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if not any(url in submission.url for url in self.reddit.config.get('domains', 'watched').split(',')):
             return Action.PASS, Rule.NONE
-        elif any(url in submission.url for url in self.reddit.config.get('domains', 'approved'.split(','))):
+        elif any(url in submission.url for url in self.reddit.config.get('domains', 'approved').split(',')):
             return Action.APPROVE, Rule.NONE
         elif any(url in submission.url for url in self.reddit.config.get('domains', 'rejected').split(',')):
             # We're checking domain rule because we don't want to depend on other validators

@@ -1,13 +1,13 @@
 import importlib
-import logging
 import sys
+import time
 from collections import deque
 from logging.handlers import RotatingFileHandler
 
 import praw
 import praw.models as models
 from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from .scheduler import *
 from .validator import *
@@ -19,7 +19,7 @@ class Reddit:
     __slots__ = [
         'config', '_username', '_password', '_client_id', '_client_secret', '_user_agent', '_checked_comments',
         '_checked_posts', '_post_checks', '_comment_checks', '_report_checks', 'domains', 'reddit',
-        'scheduler', 'validators', 'extensions', 'log'
+        'scheduler', 'validators', 'extensions', 'log', 'start_time'
     ]
 
     def __init__(self, config: str = None):
@@ -45,11 +45,12 @@ class Reddit:
 
         executors = dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor())
         job_defaults = dict(coalesce=True, max_instances=4)
-        self.scheduler = SmartScheduler(BlockingScheduler(executors=executors, job_defaults=job_defaults))
+        self.scheduler = SmartScheduler(BackgroundScheduler(executors=executors, job_defaults=job_defaults))
         self.validators = {}
         self.extensions = {'COMMENT': [], 'SUBMISSION': []}
 
         self.log = set_logger(self.config.get('general', 'log_level'))
+        self.start_time = time.time()
 
         if path:
             self.log.debug(f'[Core] Loaded custom configuration file from {path}')
@@ -58,9 +59,11 @@ class Reddit:
         self.setup()
         self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
 
-        self.scheduler.register_job("Posts", 30, self.process_submissions, self.log)
-        self.scheduler.register_job("Comments", 10, self.process_comments, self.log)
         self.scheduler.start()
+        thread = threading.Thread(target=self.process_comments, args=())
+        thread2 = threading.Thread(target=self.process_submissions, args=())
+        thread.start()
+        thread2.start()
 
     def setup(self):
         for _, validator in self.config.items('validators'):
@@ -128,30 +131,37 @@ class Reddit:
         del extension
 
     def process_submissions(self):
-        for submission in self.reddit.subreddit(self.SUBREDDITS).mod.unmoderated():
-            if submission.id in self._checked_posts:
+        self.log.debug(f'[Core] Beginning submission processing!')
+        for submission in self.reddit.subreddit(self.SUBREDDITS).stream.submissions():
+            if submission.created_utc - self.start_time < 0:
                 continue
-            self._checked_posts.append(submission.id)
-
-            approved = False
-            for validator in self.extensions['SUBMISSION']:
-                validator.dlog('Checking submission...')
-                action, rule = validator.validate(submission)
-                if action == Action.REMOVE:
-                    validator.dlog('Submission failed check!')
-                    self.remove_submission(submission, rule)
-                    break
-                elif action == Action.MANUAL:
-                    validator.dlog('Leaving for manual approval.')
-                    break
-                elif action == Action.PASS:
-                    validator.dlog('Ignoring submission.')
-                else:
-                    approved = True
-                validator.dlog('Submission passed check!')
             else:
-                if approved:  # In case no validators explicitly approve, they might all pass!
-                    self.approve_submission(submission)
+                self.check_submission(submission)
+
+    def check_submission(self, submission: models.Submission):
+        if submission.id in self._checked_posts:
+            return
+        self._checked_posts.append(submission.id)
+
+        approved, manual = False, False
+        for validator in self.extensions['SUBMISSION']:
+            validator.dlog('Checking submission...')
+            action, rule = validator.validate(submission)
+            if action == Action.REMOVE:
+                validator.dlog('Submission failed check!')
+                self.remove_submission(submission, rule)
+                break
+            elif action == Action.MANUAL:
+                validator.dlog('Leaving for manual approval.')
+                manual = True
+            elif action == Action.PASS:
+                validator.dlog('Ignoring submission.')
+            else:
+                approved = True
+            validator.dlog('Submission passed check!')
+        else:
+            if approved and not manual:  # In case no validators explicitly approve, they might all pass!
+                self.approve_submission(submission)
 
     def approve_submission(self, submission: models.Submission):
         self.log.debug(f'[Core] Submission would have been approved!')
@@ -163,30 +173,37 @@ class Reddit:
         submission.mod.remove()
 
     def process_comments(self):
-        for comment in self.reddit.subreddit(self.SUBREDDITS).comments(limit=100):
-            if comment.id in self._checked_comments or comment.submission.archived:
-                break  # We don't want to revalidate comments or go too old
-            self._checked_comments.append(comment.id)
-
-            approved = False
-            for validator in self.extensions['COMMENT']:
-                validator.dlog('Checking comment...')
-                action, rule = validator.validate(comment)
-                if action == Action.REMOVE:
-                    validator.dlog('Comment failed check!')
-                    self.remove_comment(comment, rule)
-                    break
-                elif action == Action.MANUAL:
-                    validator.dlog('Leaving for manual approval.')
-                    break
-                elif action == Action.PASS:
-                    validator.dlog('Ignoring comment.')
-                else:
-                    approved = True
-                validator.dlog('Comment passed check!')
+        self.log.debug(f'[Core] Beginning comment processing!')
+        for comment in self.reddit.subreddit(self.SUBREDDITS).stream.comments():
+            if comment.created_utc - self.start_time < 0:
+                continue
             else:
-                if approved:  # In case no validators explicitly approve, they might all pass!
-                    self.approve_comment(comment)
+                self.check_comment(comment)
+
+    def check_comment(self, comment: models.Comment):
+        if comment.id in self._checked_comments or comment.submission.archived:
+            return  # We don't want to revalidate comments or go too old
+        self._checked_comments.append(comment.id)
+
+        approved, manual = False, True
+        for validator in self.extensions['COMMENT']:
+            validator.dlog('Checking comment...')
+            action, rule = validator.validate(comment)
+            if action == Action.REMOVE:
+                validator.dlog('Comment failed check!')
+                self.remove_comment(comment, rule)
+                break
+            elif action == Action.MANUAL:
+                validator.dlog('Leaving for manual approval.')
+                manual = True
+            elif action == Action.PASS:
+                validator.dlog('Ignoring comment.')
+            else:
+                approved = True
+            validator.dlog('Comment passed check!')
+        else:
+            if approved and not manual:  # In case no validators explicitly approve, they might all pass!
+                self.approve_comment(comment)
 
     def approve_comment(self, comment: Comment):
         self.log.debug(f'[Core] Comment would have been approved!')
@@ -211,8 +228,7 @@ def set_logger(level: str):
     ch.setLevel(level)
     logger.addHandler(ch)
 
-    fh = RotatingFileHandler(filename='data/reddit.log', maxBytes=1024 * 5, backupCount=2, encoding='utf-8',
-                             mode='w')
+    fh = RotatingFileHandler(filename='data/reddit.log', maxBytes=1024 * 1024, backupCount=2, encoding='utf-8')
     fh.setFormatter(log_format)
     fh.setLevel(level)
     logger.addHandler(fh)

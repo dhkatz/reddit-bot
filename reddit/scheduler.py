@@ -15,7 +15,7 @@ class SmartJob:
             # Check if a job is already running
             if self.running:
                 # Indicate misfire and die
-                self.logger.debug(f"{self.id} Misfired")
+                self.logger.debug(f"[Scheduler] {self.id} misfired!")
                 self.misfired = True
                 return
             else:
@@ -27,8 +27,8 @@ class SmartJob:
         try:
             self.action()
         except Exception as error:
-            self.logger.debug(f"{self.id} Exited with an exception - " + repr(error))
-            self.logger.error(error)
+            self.logger.debug(f"[Scheduler] {self.id} exited with an exception:", exc_info=error)
+            # self.logger.error(error)
 
         # Run misfire recovery on same thread in the event of a misfire
         while True:

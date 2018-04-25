@@ -158,4 +158,4 @@ venv.bak/
 .mypy_cache/
 /data/
 .idea
-/reddit/config.ini
+config.ini
