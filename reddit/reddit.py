@@ -55,7 +55,7 @@ class Reddit:
         config_path.read(path if path else os.path.join(os.path.dirname(__file__), 'config.ini'))
 
         self.config = config_path
-        self.log = set_logger(self.config.get('general', 'log_level'))
+        self.log = set_logger(self.config.get('logging', 'log_level'))
 
         info = dict(config_path.items('reddit'))
         self.reddit = praw.Reddit(

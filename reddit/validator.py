@@ -45,8 +45,7 @@ class Validator:
         message: str
             The message to log.
         """
-        if self.reddit.log.isEnabledFor(logging.DEBUG):
-            self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
+        self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
 
 
 class SubmissionValidator(Validator):
@@ -67,6 +66,17 @@ class SubmissionValidator(Validator):
         """
         return Action.PASS, Rule.NONE
 
+    def dlog(self, message: str):
+        """Log messages at the debug level. The validator name is prefixed automatically!
+
+        Parameters
+        ----------
+        message: str
+            The message to log.
+        """
+        if 'submission' in self.config.get('logging', 'type') or '*' in self.config.get('logging', 'type'):
+            self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
+
 
 class CommentValidator(Validator):
     """Base Validator used for validators meant to validate a Submission"""
@@ -85,3 +95,14 @@ class CommentValidator(Validator):
 
         """
         return Action.PASS, Rule.NONE
+
+    def dlog(self, message: str):
+        """Log messages at the debug level. The validator name is prefixed automatically!
+
+        Parameters
+        ----------
+        message: str
+            The message to log.
+        """
+        if 'comment' in self.config.get('logging', 'type') or '*' in self.config.get('logging', 'type'):
+            self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
