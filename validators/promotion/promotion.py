@@ -103,7 +103,7 @@ class PromotionValidator(SubmissionValidator):
 
         if count < self.config.getint('general', 'comment_limit'):
             if self.youtube.validate(submission)[0] == Action.REMOVE:
-                self.dlog(f'Removing video longer than {self.config.getfloat("general", "time_limit")} seconds.')
+                self.ilog(f'Removing video longer than {self.config.getfloat("general", "time_limit")} seconds.')
                 return Action.REMOVE, Rule.PROMOTION
             else:
                 return Action.APPROVE, Rule.NONE

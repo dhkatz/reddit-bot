@@ -53,6 +53,8 @@ class EpicValidator(CommentValidator):
                 sticky.body + '\n\n[Epic Comment ' + str(self.num_epic_comments(comment.submission)) +
                 f']({comment.permalink})'
             )
+
+            self.ilog('Created new Epic comment sticky.')
         else:
             sticky = comment.submission.reply(
                 '##Comments by Epic Games:##\n\n' +
@@ -60,6 +62,8 @@ class EpicValidator(CommentValidator):
             )
             sticky.mod.distinguish(sticky=True)
             self._sticky_store[comment.submission.id] = sticky.id
+
+            self.ilog('Added Epic comment to sticky.')
 
         return Action.APPROVE, Rule.NONE
 

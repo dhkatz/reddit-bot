@@ -47,6 +47,9 @@ class Validator:
         """
         self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
 
+    def ilog(self, message: str):
+        self.reddit.log.info(f'[{type(self).__name__}] ' + message)
+
 
 class SubmissionValidator(Validator):
     """Base :class:`Validator` used for validators meant to validate a Submission"""
