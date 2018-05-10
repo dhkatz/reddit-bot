@@ -67,7 +67,7 @@ class EpicValidator(CommentValidator):
         if submission.id in self._sticky_store:
             return self._sticky_store[submission.id]
         else:  # In case the bot restarted let's check if it's already in the thread
-            submission.comments.replace_more(limit=None)
+            submission.comments.refresh()
             for comment in submission.comments.list():
                 if comment.author.name == self._praw.user.me() and 'Comments by Epic Games' in comment.body:
                     self._sticky_store[submission.id] = comment.id

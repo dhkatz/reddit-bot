@@ -6,7 +6,7 @@ from reddit.reddit import Reddit
 
 def main(config):
     # You can pass in a path to a custom config .ini file on the command line
-    bot = Reddit(config=config)
+    bot = Reddit(config_path=config)
     bot.run()
 
 

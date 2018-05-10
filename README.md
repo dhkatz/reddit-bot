@@ -122,10 +122,11 @@ Currently, you *are* required to return both an `Action` and `Rule` for `Comment
 ### Requirements
 
 * Python 3.6+
+* requests
 * PRAW
 * peewee
 * apscheduler
-* youtube_dl
+* isodate
 * namedlist
 
 ### Install

@@ -1,7 +1,7 @@
+import configparser
 import importlib
 import sys
 import time
-from collections import deque
 from logging.handlers import RotatingFileHandler
 
 import praw
@@ -14,58 +14,88 @@ from .validator import *
 
 
 class Reddit:
-    SUBREDDITS = 'doctorjewtest'
+    """Reddit bot designed to process submissions and comments on watched subreddits.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to custom configuration file.
+
+    Attributes
+    ----------
+    config: configparser.ConfigParser
+        The configuration of the bot.
+    log: logging.Logger
+        Logger used for saving log files and debugging.
+    reddit: praw.Reddit
+        The PRAW instance used for interaction with Reddit.
+    subreddits: praw.Subreddit
+        Subreddit instance of watched subreddits
+    scheduler: SmartScheduler
+        Custom scheduler with misfire protection used for background tasks.
+    domains: dict
+        Known domains the validators may look out for.
+    validators: dict
+        Modules of the validators that every Comment and Submission are checked against.
+    extensions: dict
+        Contains the actually objects of every Validator
+    start_time: float
+        Time the bot started, epoch time.
+    """
 
     __slots__ = [
-        'config', '_username', '_password', '_client_id', '_client_secret', '_user_agent', '_checked_comments',
-        '_checked_posts', '_post_checks', '_comment_checks', '_report_checks', 'domains', 'reddit',
-        'scheduler', 'validators', 'extensions', 'log', 'start_time'
+        'config', '_post_checks', '_comment_checks', '_report_checks',
+        'domains', 'reddit', 'scheduler', 'validators', 'extensions', 'log', 'start_time',
+        '_comment_thread', '_submission_thread', 'subreddits', '_results'
     ]
 
-    def __init__(self, config: str = None):
-        path = config
-        config = configparser.ConfigParser()
-        config.read(path if path else os.path.join(os.path.dirname(__file__), 'config.ini'))
+    def __init__(self, config_path: str = None):
+        path = config_path
+        config_path = configparser.ConfigParser()
+        config_path.read(path if path else os.path.join(os.path.dirname(__file__), 'config.ini'))
 
-        self.config = config
-        self._username = config.get('reddit', 'username')
-        self._password = config.get('reddit', 'password')
-        self._client_id = config.get('reddit', 'client_id')
-        self._client_secret = config.get('reddit', 'client_secret')
-        self._user_agent = config.get('reddit', 'user_agent')
-        self._checked_comments = deque(maxlen=100)
-        self._checked_posts = deque(maxlen=100)
-        self._post_checks = []
-        self._comment_checks = []
-        self._report_checks = []
+        self.config = config_path
+        self.log = set_logger(self.config.get('general', 'log_level'))
 
-        self.domains = dict(config.items('domains'))
-        self.reddit = praw.Reddit(username=self._username, password=self._password, client_id=self._client_id,
-                                  client_secret=self._client_secret, user_agent=self._user_agent)
+        info = dict(config_path.items('reddit'))
+        self.reddit = praw.Reddit(
+            username=info['username'], password=info['password'], client_id=info['client_id'],
+            client_secret=info['client_secret'], user_agent=info['user_agent']
+        )
+        self.subreddits = self.reddit.subreddit(self.config.get('general', 'subreddits'))
 
-        executors = dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor())
-        job_defaults = dict(coalesce=True, max_instances=4)
-        self.scheduler = SmartScheduler(BackgroundScheduler(executors=executors, job_defaults=job_defaults))
+        self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
+
+        self.scheduler = SmartScheduler(BackgroundScheduler(
+            executors=dict(default=ThreadPoolExecutor(20), processpool=ProcessPoolExecutor()),
+            job_defaults=dict(coalesce=True, max_instances=4))
+        )
+
+        self.domains = dict(config_path.items('domains'))
         self.validators = {}
         self.extensions = {'COMMENT': [], 'SUBMISSION': []}
 
-        self.log = set_logger(self.config.get('general', 'log_level'))
         self.start_time = time.time()
 
         if path:
             self.log.debug(f'[Core] Loaded custom configuration file from {path}')
 
+        self._comment_thread = threading.Thread(target=self.process_comments, args=())
+        self._submission_thread = threading.Thread(target=self.process_submissions, args=())
+        self._post_checks = []
+        self._comment_checks = []
+        self._report_checks = []
+        self._results = []
+
     def run(self):
-        self.setup()
-        self.log.info(f'[Core] Logged in as {self.reddit.user.me()}')
+        """Begin execution of all processing."""
+        self._setup()
 
         self.scheduler.start()
-        thread = threading.Thread(target=self.process_comments, args=())
-        thread2 = threading.Thread(target=self.process_submissions, args=())
-        thread.start()
-        thread2.start()
+        self._comment_thread.start()
+        self._submission_thread.start()
 
-    def setup(self):
+    def _setup(self):
         for _, validator in self.config.items('validators'):
             if not validator:
                 continue
@@ -132,17 +162,15 @@ class Reddit:
 
     def process_submissions(self):
         self.log.debug(f'[Core] Beginning submission processing!')
-        for submission in self.reddit.subreddit(self.SUBREDDITS).stream.submissions():
-            if submission.created_utc - self.start_time < 0:
+        for submission in self.subreddits.stream.submissions():
+            if submission.created_utc - self.start_time < 0:  # Ignore old (they get loaded initially sometimes)
+                continue
+            elif submission.removed:  # In case another bot got to it first!
                 continue
             else:
                 self.check_submission(submission)
 
     def check_submission(self, submission: models.Submission):
-        if submission.id in self._checked_posts:
-            return
-        self._checked_posts.append(submission.id)
-
         approved, manual = False, False
         for validator in self.extensions['SUBMISSION']:
             validator.dlog('Checking submission...')
@@ -158,32 +186,33 @@ class Reddit:
                 validator.dlog('Ignoring submission.')
             else:
                 approved = True
-            validator.dlog('Submission passed check!')
+                validator.dlog('Submission passed check!')
         else:
             if approved and not manual:  # In case no validators explicitly approve, they might all pass!
                 self.approve_submission(submission)
+            elif manual:
+                self.log.debug(f'[Core] Submission waiting for manual approval! {submission.permalink}')
 
     def approve_submission(self, submission: models.Submission):
-        self.log.debug(f'[Core] Submission would have been approved!')
+        self.log.debug(f'[Core] Submission would have been approved! {submission.permalink}')
         submission.mod.approve()
 
     def remove_submission(self, submission: models.Submission, rule: Rule):
-        self.log.debug(f'[Core] Submission would have been removed!')
+        self.log.debug(f'[Core] Submission would have been removed! {submission.permalink}')
         submission.reply(str(rule)).mod.distinguish(sticky=False)
         submission.mod.remove()
 
     def process_comments(self):
         self.log.debug(f'[Core] Beginning comment processing!')
-        for comment in self.reddit.subreddit(self.SUBREDDITS).stream.comments():
+        for comment in self.subreddits.stream.comments():
             if comment.created_utc - self.start_time < 0:
                 continue
             else:
                 self.check_comment(comment)
 
     def check_comment(self, comment: models.Comment):
-        if comment.id in self._checked_comments or comment.submission.archived:
+        if comment.submission.archived:
             return  # We don't want to revalidate comments or go too old
-        self._checked_comments.append(comment.id)
 
         approved, manual = False, True
         for validator in self.extensions['COMMENT']:
@@ -200,7 +229,7 @@ class Reddit:
                 validator.dlog('Ignoring comment.')
             else:
                 approved = True
-            validator.dlog('Comment passed check!')
+                validator.dlog('Comment passed check!')
         else:
             if approved and not manual:  # In case no validators explicitly approve, they might all pass!
                 self.approve_comment(comment)

@@ -1,6 +1,5 @@
 requests
 apscheduler
 praw
-peewee
 namedlist
 isodate

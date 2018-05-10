@@ -1,4 +1,5 @@
 from collections import deque
+import queue
 from time import time
 from namedlist import namedlist
 from typing import Tuple
@@ -17,17 +18,30 @@ class FlairValidator(SubmissionValidator):
 
     def __init__(self, reddit):
         super().__init__(reddit)
-        self._store = deque(maxlen=1000)
+        self._store = deque()
+        self._queue = queue.Queue()
 
     def process(self):
-        self._store = deque([submission for submission in list(self._store) if self.check(submission)])
+        while True:
+            try:
+                submission = self._queue.get(block=False)
+            except queue.Empty:
+                break
+            else:
+                self._store.appendleft(submission)
+
+        self._store = deque(submission for submission in self._store if self.check(submission))
 
     def check(self, watched_submission: WatchedSubmission) -> bool:
         elapsed_time = time() - watched_submission.created
         if elapsed_time < self.config.getint('general', 'warn_time'):
             return True  # We can avoid unnecessary requests by checking first!
 
-        submission = self._praw.submission(watched_submission.id)
+        submission = self._praw.submission(id=watched_submission.id)
+
+        if not submission or (submission and not submission.author):
+            self.dlog(f'Failed to retrieve submission from store! {watched_submission}')
+            return False
 
         if not watched_submission.warned and submission.link_flair_text is None:
             self.dlog('Warning user about an unflaired post!')
@@ -52,9 +66,10 @@ class FlairValidator(SubmissionValidator):
     def validate(self, submission: Submission) -> Tuple[Action, Rule]:
         if submission.link_flair_text is None:
             watch = WatchedSubmission(submission.id, submission.created_utc, False)
-            self._store.appendleft(watch)
+            self._queue.put(watch)
             self.dlog('Storing submission for later processing...')
-            return Action.PASS, Rule.NONE  # We can't actually make a judgement yet
+
+        return Action.APPROVE, Rule.NONE  # We can't actually make a judgement yet
 
 
 def setup(reddit):

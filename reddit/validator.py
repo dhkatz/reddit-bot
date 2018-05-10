@@ -11,6 +11,16 @@ from .enums import Action, Rule
 
 
 class Validator:
+    """Represents a base :class:`Validator` to all other subclasses.
+
+    This implements basic configuration, logging, and processing functinality.
+
+    Attributes
+    ----------
+    reddit: praw.Reddit
+        The main bot instance. Used to access configuration attributes
+    config: configparser.ConfigParser
+    """
     __slots__ = ['_praw', 'config', 'reddit']
 
     def __init__(self, reddit):
@@ -24,19 +34,54 @@ class Validator:
         self.reddit.scheduler.register_job(type(self).__name__, 15, self.process, self.reddit.log)
 
     def process(self):
+        """Base processing implementation. Gets called on an interval for validator processing."""
         pass
 
     def dlog(self, message: str):
-        """Log messages at the debug level. The validator name is prefixed automatically!"""
+        """Log messages at the debug level. The validator name is prefixed automatically!
+
+        Parameters
+        ----------
+        message: str
+            The message to log.
+        """
         if self.reddit.log.isEnabledFor(logging.DEBUG):
             self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
 
 
 class SubmissionValidator(Validator):
+    """Base :class:`Validator` used for validators meant to validate a Submission"""
     def validate(self, submission: Submission) -> Tuple[Action, Rule]:
+        """Validate a submission and return a verdict.
+
+        Parameters
+        ---------
+        submission: praw.models.Submission
+            Submission to be validated.
+
+        Returns
+        -------
+        Action, Rule
+            Action and Rule enums based on the validation computed.
+
+        """
         return Action.PASS, Rule.NONE
 
 
 class CommentValidator(Validator):
+    """Base Validator used for validators meant to validate a Submission"""
     def validate(self, comment: Comment) -> Tuple[Action, Rule]:
+        """Validate a submission and return a verdict.
+
+        Parameters
+        ---------
+        comment: praw.models.Submission
+            Submission to be validated.
+
+        Returns
+        -------
+        Action, Rule
+            Action and Rule enums based on the validation computed.
+
+        """
         return Action.PASS, Rule.NONE
