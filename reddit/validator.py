@@ -77,7 +77,7 @@ class SubmissionValidator(Validator):
         message: str
             The message to log.
         """
-        if 'submission' in self.config.get('logging', 'type') or '*' in self.config.get('logging', 'type'):
+        if 'submission' in self.config.get('logging', 'type') or '*' in self.reddit.config.get('logging', 'type'):
             self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
 
 
@@ -107,5 +107,5 @@ class CommentValidator(Validator):
         message: str
             The message to log.
         """
-        if 'comment' in self.config.get('logging', 'type') or '*' in self.config.get('logging', 'type'):
+        if 'comment' in self.config.get('logging', 'type') or '*' in self.reddit.config.get('logging', 'type'):
             self.reddit.log.debug(f'[{type(self).__name__}] ' + message)
