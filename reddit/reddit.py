@@ -162,6 +162,14 @@ class Reddit:
 
     def process_submissions(self):
         self.log.info(f'[Core] Beginning submission processing!')
+        self.log.info(f'[Core] Processing moderator queue...')
+
+        for submission in self.subreddits.mod.modqueue():
+            self.check_submission(submission)
+
+        self.log.info(f'[Core] Finished moderator queue processing!')
+        self.log.info(f'[Core] Processing submission stream...')
+
         for submission in self.subreddits.stream.submissions():
             if submission.created_utc - self.start_time < 0:  # Ignore old (they get loaded initially sometimes)
                 continue
