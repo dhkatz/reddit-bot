@@ -105,7 +105,7 @@ class Reddit:
             except ImportError as error:
                 self.log.error(f'[Core] Unable to load validator: {validator}! (Error: {error})')
             else:
-                self.log.debug(f'[Core] Loaded validator: {validator}!')
+                self.log.info(f'[Core] Loaded validator: {validator}!')
 
     def load_validator(self, name):
         name = name + '.' + name.split('.')[1]
@@ -161,7 +161,7 @@ class Reddit:
         del extension
 
     def process_submissions(self):
-        self.log.debug(f'[Core] Beginning submission processing!')
+        self.log.info(f'[Core] Beginning submission processing!')
         for submission in self.subreddits.stream.submissions():
             if submission.created_utc - self.start_time < 0:  # Ignore old (they get loaded initially sometimes)
                 continue
@@ -203,7 +203,7 @@ class Reddit:
         submission.mod.remove()
 
     def process_comments(self):
-        self.log.debug(f'[Core] Beginning comment processing!')
+        self.log.info(f'[Core] Beginning comment processing!')
         for comment in self.subreddits.stream.comments():
             if comment.created_utc - self.start_time < 0:
                 continue
@@ -257,7 +257,7 @@ def set_logger(level: str):
     ch.setLevel(level)
     logger.addHandler(ch)
 
-    fh = RotatingFileHandler(filename='data/reddit.log', maxBytes=1024 * 1024, backupCount=2, encoding='utf-8')
+    fh = RotatingFileHandler(filename='data/reddit.log', maxBytes=1024 * 1024 * 10, backupCount=2, encoding='utf-8')
     fh.setFormatter(log_format)
     fh.setLevel(level)
     logger.addHandler(fh)

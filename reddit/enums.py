@@ -21,6 +21,8 @@ flair = """
 
 We require all users to set a post flair for their own post. There is a 30 minute grace period, and this has passed for this post. 
 
+Don't know how to flair your post? Click [here](http://imgur.com/a/m3FI3) to view this helpful guide on how to flair your post. 
+
 For more information, please read [this post](https://www.reddit.com/r/FortNiteBR/comments/8bznpy/state_of_the_subreddit_new_moderators_survey/).
 """
 
