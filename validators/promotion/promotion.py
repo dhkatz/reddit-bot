@@ -28,7 +28,10 @@ class YoutubeValidator(SubmissionValidator):
                 else:
                     raise ConnectionError
 
-                duration = isodate.parse_duration(data['items'][0]['contentDetails']['duration']).total_seconds()
+                try:
+                    duration = isodate.parse_duration(data['items'][0]['contentDetails']['duration']).total_seconds()
+                except IndexError:
+                    duration = 0
 
                 if duration > self.config.getfloat('general', 'time_limit'):
                     return Action.REMOVE, Rule.PROMOTION

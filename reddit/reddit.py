@@ -164,10 +164,16 @@ class Reddit:
         self.log.info(f'[Core] Beginning submission processing!')
         self.log.info(f'[Core] Processing moderator queue...')
 
-        for submission in self.subreddits.mod.modqueue():
+        for submission in self.subreddits.mod.modqueue(only='submissions'):
             self.check_submission(submission)
 
         self.log.info(f'[Core] Finished moderator queue processing!')
+        self.log.info(f'[Core] Processing unmoderated queue...')
+
+        for submission in self.subreddits.mod.unmoderated():
+            self.check_submission(submission)
+
+        self.log.info(f'[Core] Finished unmoderated queue processing!')
         self.log.info(f'[Core] Processing submission stream...')
 
         for submission in self.subreddits.stream.submissions():
