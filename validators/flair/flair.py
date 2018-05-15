@@ -69,7 +69,7 @@ class FlairValidator(SubmissionValidator):
             self._queue.put(watch)
             self.dlog('Storing submission for later processing...')
 
-        return Action.APPROVE, Rule.NONE  # We can't actually make a judgement yet
+        return Action.PASS, Rule.NONE  # We can't actually make a judgement yet
 
 
 def setup(reddit):
